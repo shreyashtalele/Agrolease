@@ -69,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     VALUES ('$userId', '$equipmentId', '$vendorId', '$quantity', '$rentalStartDate', '$rentalEndDate', '$rentalDuration', '$price')";
 
     if (mysqli_query($conn, $insertQuery)) {
-        $_SESSION['success_message'] = "Your request is sent to Farmer, please check notifications section.";
+        $_SESSION['success_message'] = "Your request is sent to Vendor, please check notifications section.";
         header("Location: rent.php");
         exit;
     } else {

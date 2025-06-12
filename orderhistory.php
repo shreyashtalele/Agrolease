@@ -49,6 +49,7 @@ $result = mysqli_query($conn, $query);
     
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
 
     <style>
         :root {
@@ -71,15 +72,38 @@ $result = mysqli_query($conn, $query);
             line-height: 1.6;
         }
         
-        header {
-            background: linear-gradient(135deg, var(--primary-dark), var(--primary-color));
-            color: white;
-            padding: 1.5rem 0;
-            box-shadow: var(--box-shadow);
-            position: relative;
-            z-index: 10;
-        }
-        
+      header {
+    background-color: #006400;
+    color: #fff;
+    padding: 20px 0;
+    width: 100%;
+}
+
+.container-fluid {
+    padding: 0 40px;
+}
+
+.header-link {
+    color: #b2d8b2;
+    text-decoration: none;
+    background-color: #004d00;
+    padding: 8px 14px;
+    border-radius: 5px;
+    font-weight: 500;
+    transition: background-color 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.header-link:hover {
+    background-color: #003300;
+    color: #fff;
+}
+
+.header-link i {
+    font-size: 18px;
+}
         .logo-container {
             width: 60px;
             height: 60px;
@@ -297,17 +321,21 @@ $result = mysqli_query($conn, $query);
     </style>
 </head>
 <body>
-
 <header>
-    <div class="container">
-        <div class="d-flex align-items-center gap-4">
-            <div class="logo-container">
-                <img src="img/logo.jpeg" alt="Agrolease Logo">
+    <div class="container-fluid">
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-4">
+                <div class="logo-container">
+                    <img src="img/logo.jpeg" alt="Agrolease Logo">
+                </div>
+                <div class="header-content">
+                    <h1>Agrolease</h1>
+                    <p>Harvest Success with Our Innovative Farming Solutions</p>
+                </div>
             </div>
-            <div class="header-content">
-                <h1>Agrolease</h1>
-                <p>Harvest Success with Our Innovative Farming Solutions</p>
-            </div>
+            <a href="dashboard.php" class="header-link">
+                <i class="material-icons">arrow_back</i> Back
+            </a>
         </div>
     </div>
 </header>

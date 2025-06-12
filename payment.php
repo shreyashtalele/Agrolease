@@ -2,43 +2,59 @@
 session_start();
 include 'db.php';
 
-// Check if user is logged in
 if (!isset($_SESSION['user']['userid'])) {
-    header("Location: login.php");
+    echo "User ID is missing. Please log in again.";
     exit;
 }
 
 $userID = $_SESSION['user']['userid'];
 
-// Get user's confirmed orders
 $query = "SELECT o.*, e.equipment_name, e.rent_per_day
           FROM orders o
           INNER JOIN equipment e ON o.equipment_id = e.equipment_id
-          WHERE o.user_id = '$userID' AND o.status = 'confirmed'";
-$result = mysqli_query($conn, $query);
+          WHERE o.user_id = '$userID'
+            AND o.status = 'confirmed'
+            AND o.payment_status = 'pending'";
 
-// Handle payment processing
+$result = mysqli_query($conn, $query);
+if (!$result) {
+    echo "Error: " . mysqli_error($conn);
+    exit;
+}
+
+// Simulate payment processing
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['order_id'])) {
-    $order_id = mysqli_real_escape_string($conn, $_POST['order_id']);
-    $payment_method = mysqli_real_escape_string($conn, $_POST['payment_method'] ?? 'card');
+    sleep(2); // Simulate processing delay
     
-    // Simulate payment processing (10% chance of failure)
-    $success = (rand(1, 10) !== 1);
+    // Generate realistic payment response
+    $payment_id = 'PAY-' . strtoupper(bin2hex(random_bytes(5)));
+    $timestamp = date('Y-m-d H:i:s');
+    $order_id = $_POST['order_id'];
     
-    if ($success) {
-        $update = mysqli_query($conn, "UPDATE orders SET payment_status='paid', payment_method='$payment_method' WHERE order_id='$order_id'");
-        if ($update) {
-            echo json_encode([
-                'success' => true,
-                'payment_id' => 'pmt_' . bin2hex(random_bytes(8)),
-                'timestamp' => date('Y-m-d H:i:s')
-            ]);
-        } else {
-            echo json_encode(['success' => false, 'message' => 'Database error']);
-        }
-    } else {
-        echo json_encode(['success' => false, 'message' => 'Payment declined by bank']);
+    // Update payment status in database
+    $update_query = "UPDATE orders SET 
+                payment_status = 'success' 
+                WHERE order_id = '$order_id'";
+
+    
+    $update_result = mysqli_query($conn, $update_query);
+    
+    if (!$update_result) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'Database update failed: ' . mysqli_error($conn)
+        ]);
+        exit;
     }
+    
+    echo json_encode([
+        'success' => true,
+        'payment_id' => $payment_id,
+        'timestamp' => $timestamp,
+        'method' => 'card',
+        'bank_ref' => 'BANK' . mt_rand(100000, 999999),
+        'auth_code' => strtoupper(bin2hex(random_bytes(3)))
+    ]);
     exit;
 }
 ?>
@@ -47,463 +63,876 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['order_id'])) {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Payment Portal</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agrolease - Secure Payment Portal</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <style>
     :root {
       --primary: #2e7d32;
       --primary-light: #60ad5e;
       --primary-dark: #005005;
-      --text-dark: #333;
-      --text-light: #666;
-      --success: #388e3c;
-      --warning: #ffa000;
-      --error: #d32f2f;
-      --border-radius: 8px;
-      --box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      --secondary: #f8f9fa;
+      --accent: #ffc107;
+      --text-dark: #2d3748;
+      --text-light: #718096;
+      --error: #e53e3e;
+      --success: #38a169;
+      --warning: #dd6b20;
+      --border-radius: 12px;
+      --box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      --transition: all 0.3s ease;
     }
-    
+
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
     }
-    
+
     body {
       font-family: 'Poppins', sans-serif;
-      background: #f5f5f5;
+      background: #f8fafc;
       color: var(--text-dark);
       line-height: 1.6;
     }
-    
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 20px;
-    }
-    
-    header {
-      background: var(--primary);
+
+    /* Modern Header */
+    .payment-header {
+      background: linear-gradient(135deg, var(--primary-dark), var(--primary));
       color: white;
-      padding: 15px 20px;
+      padding: 1.5rem 5%;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 30px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      position: relative;
+      z-index: 100;
     }
-    
-    .logo {
-      font-weight: 600;
+
+    .payment-brand {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .payment-logo {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .payment-title {
       font-size: 1.5rem;
+      font-weight: 700;
     }
-    
+
+    .payment-tagline {
+      font-size: 0.85rem;
+      opacity: 0.9;
+    }
+
     .back-btn {
+      background: rgba(255, 255, 255, 0.15);
       color: white;
-      text-decoration: none;
-      background: rgba(255,255,255,0.2);
-      padding: 8px 15px;
-      border-radius: var(--border-radius);
-      font-size: 0.9rem;
+      padding: 0.75rem 1.25rem;
+      border-radius: 8px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: var(--transition);
     }
-    
-    h1 {
-      text-align: center;
-      margin-bottom: 30px;
+
+    .back-btn:hover {
+      background: rgba(255, 255, 255, 0.25);
+      transform: translateY(-2px);
+    }
+
+    /* Main Container */
+    .payment-container {
+      max-width: 1200px;
+      margin: 2rem auto;
+      padding: 0 5%;
+    }
+
+    .page-title {
+      font-size: 2rem;
+      font-weight: 700;
       color: var(--primary);
+      margin-bottom: 2rem;
+      position: relative;
+      display: inline-block;
     }
-    
-    .orders-grid {
+
+    .page-title::after {
+      content: '';
+      position: absolute;
+      bottom: -10px;
+      left: 0;
+      width: 60px;
+      height: 4px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+
+    /* Payment Cards Grid */
+    .payment-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 20px;
+      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+      gap: 1.5rem;
+      margin-top: 2rem;
     }
-    
-    .order-card {
+
+    /* Payment Card */
+    .payment-card {
       background: white;
       border-radius: var(--border-radius);
       box-shadow: var(--box-shadow);
-      padding: 20px;
+      padding: 1.5rem;
+      transition: var(--transition);
+      border: 1px solid rgba(0, 0, 0, 0.05);
       position: relative;
+      overflow: hidden;
     }
-    
-    .order-id {
-      font-weight: 600;
-      color: var(--primary);
-      margin-bottom: 10px;
-    }
-    
-    .status {
+
+    .payment-card::before {
+      content: '';
       position: absolute;
-      top: 20px;
-      right: 20px;
-      font-size: 0.8rem;
-      padding: 3px 10px;
-      border-radius: 20px;
-      background: #e0f7fa;
-      color: #00796b;
+      top: 0;
+      left: 0;
+      width: 5px;
+      height: 100%;
+      background: var(--primary);
     }
-    
-    .status.paid {
-      background: #e8f5e9;
-      color: var(--success);
-    }
-    
-    .order-details p {
-      margin: 8px 0;
-      font-size: 0.9rem;
-      color: var(--text-light);
+
+    .payment-card-header {
       display: flex;
       justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
     }
-    
-    .order-details p strong {
-      color: var(--text-dark);
+
+    .payment-id {
+      font-weight: 700;
+      color: var(--primary);
+      font-size: 1.1rem;
     }
-    
-    .total {
-      margin-top: 15px;
-      padding-top: 10px;
-      border-top: 1px dashed #eee;
+
+    .payment-status {
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.5rem 1rem;
+      border-radius: 20px;
+      text-transform: uppercase;
+    }
+
+    .status-pending {
+      background: rgba(221, 107, 32, 0.1);
+      color: var(--warning);
+    }
+
+    .status-paid {
+      background: rgba(56, 161, 105, 0.1);
+      color: var(--success);
+    }
+
+    .payment-details {
+      margin-bottom: 1.5rem;
+    }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.75rem;
+      font-size: 0.95rem;
+    }
+
+    .detail-label {
+      color: var(--text-light);
+      font-weight: 500;
+    }
+
+    .detail-value {
       font-weight: 600;
     }
-    
+
+    .payment-total {
+      border-top: 1px dashed #eee;
+      padding-top: 1rem;
+      margin-top: 1rem;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
     .pay-btn {
       width: 100%;
-      margin-top: 15px;
-      padding: 10px;
+      padding: 1rem;
       background: var(--primary);
       color: white;
       border: none;
-      border-radius: var(--border-radius);
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 1rem;
       cursor: pointer;
-      font-weight: 500;
+      transition: var(--transition);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      box-shadow: 0 4px 12px rgba(46, 125, 50, 0.2);
     }
-    
+
+    .pay-btn:hover:not(:disabled) {
+      background: var(--primary-dark);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(46, 125, 50, 0.3);
+    }
+
     .pay-btn:disabled {
-      background: #ccc;
+      background: #e2e8f0;
+      color: #a0aec0;
       cursor: not-allowed;
     }
-    
-    .empty-state {
-      text-align: center;
-      padding: 50px 20px;
-    }
-    
-    .empty-state i {
-      font-size: 3rem;
-      color: #ddd;
-      margin-bottom: 15px;
-    }
-    
-    /* Modal Styles */
-    .modal {
+
+    /* Payment Modal */
+    .payment-modal {
       position: fixed;
       top: 0;
       left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.5);
-      display: none;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
       justify-content: center;
       align-items: center;
-      z-index: 100;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: var(--transition);
+      backdrop-filter: blur(5px);
     }
-    
+
+    .payment-modal.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
     .modal-content {
       background: white;
       border-radius: var(--border-radius);
-      width: 90%;
-      max-width: 500px;
-      padding: 25px;
-      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-    }
-    
-    .payment-methods {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 20px;
-    }
-    
-    .method {
-      flex: 1;
-      padding: 15px;
-      border: 1px solid #ddd;
-      border-radius: var(--border-radius);
-      text-align: center;
-      cursor: pointer;
-    }
-    
-    .method.selected {
-      border-color: var(--primary);
-      background: #f0f9f0;
-    }
-    
-    .payment-form {
-      margin-bottom: 20px;
-    }
-    
-    .form-group {
-      margin-bottom: 15px;
-    }
-    
-    .form-group input, .form-group select {
       width: 100%;
-      padding: 10px;
-      border: 1px solid #ddd;
-      border-radius: var(--border-radius);
+      max-width: 500px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+      transform: translateY(20px);
+      transition: var(--transition);
+      overflow: hidden;
     }
-    
-    .modal-footer {
-      display: flex;
-      gap: 10px;
+
+    .payment-modal.active .modal-content {
+      transform: translateY(0);
     }
-    
-    .modal-btn {
-      flex: 1;
-      padding: 10px;
+
+    .modal-header {
+      padding: 1.5rem;
+      background: var(--primary);
+      color: white;
+      position: relative;
+    }
+
+    .modal-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 1.5rem;
+      right: 1.5rem;
+      background: none;
       border: none;
-      border-radius: var(--border-radius);
+      color: white;
+      font-size: 1.5rem;
       cursor: pointer;
     }
-    
-    .confirm-btn {
+
+    .modal-body {
+      padding: 1.5rem;
+    }
+
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+
+    .form-label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 1rem;
+      transition: var(--transition);
+    }
+
+    .form-control:focus {
+      border-color: var(--primary-light);
+      box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.1);
+      outline: none;
+    }
+
+    .card-group {
+      display: flex;
+      gap: 1rem;
+    }
+
+    .card-input {
+      flex: 1;
+    }
+
+    .card-expiry-cvv {
+      display: flex;
+      gap: 1rem;
+    }
+
+    .expiry-input, .cvv-input {
+      width: 100px;
+    }
+
+    .modal-footer {
+      padding: 1.5rem;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: flex-end;
+      gap: 1rem;
+    }
+
+    .btn {
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition);
+      border: none;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .btn-primary {
       background: var(--primary);
       color: white;
     }
-    
-    /* Success Message */
-    .success-message {
-      text-align: center;
-      display: none;
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
     }
-    
-    .success-message i {
-      font-size: 3rem;
-      color: var(--success);
-      margin-bottom: 15px;
+
+    .btn-outline {
+      background: white;
+      border: 1px solid #e2e8f0;
+      color: var(--text-light);
     }
-    
-    /* Toast */
-    .toast {
+
+    .btn-outline:hover {
+      border-color: var(--primary-light);
+      color: var(--primary);
+    }
+
+    /* Payment Processing */
+    .processing-overlay {
       position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.9);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 2000;
+      opacity: 0;
+      pointer-events: none;
+      transition: var(--transition);
+    }
+
+    .processing-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .processing-spinner {
+      width: 60px;
+      height: 60px;
+      border: 5px solid rgba(46, 125, 50, 0.2);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 1.5rem;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .processing-text {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 0.5rem;
+    }
+
+    .processing-subtext {
+      color: var(--text-light);
+      max-width: 300px;
+      text-align: center;
+    }
+
+    /* Payment Success */
+    .success-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: white;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 2000;
+      opacity: 0;
+      pointer-events: none;
+      transition: var(--transition);
+      padding: 2rem;
+      text-align: center;
+    }
+
+    .success-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .success-icon {
+      width: 80px;
+      height: 80px;
+      background: rgba(56, 161, 105, 0.1);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1.5rem;
+    }
+
+    .success-icon i {
+      font-size: 2.5rem;
+      color: var(--success);
+    }
+
+    .success-title {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--success);
+      margin-bottom: 1rem;
+    }
+
+    .success-details {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 1.5rem;
+      width: 100%;
+      max-width: 400px;
+      margin-bottom: 2rem;
+      text-align: left;
+    }
+
+    .success-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.75rem;
+    }
+
+    .success-label {
+      color: var(--text-light);
+      font-weight: 500;
+    }
+
+    .success-value {
+      font-weight: 600;
+    }
+
+    .success-btn {
+      padding: 1rem 2rem;
       background: var(--primary);
       color: white;
-      padding: 10px 20px;
-      border-radius: 20px;
-      display: none;
-      z-index: 1000;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: var(--transition);
     }
-    
-    .toast.error {
-      background: var(--error);
+
+    .success-btn:hover {
+      background: var(--primary-dark);
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 3rem 0;
+      grid-column: 1 / -1;
+    }
+
+    .empty-icon {
+      font-size: 4rem;
+      color: #e2e8f0;
+      margin-bottom: 1.5rem;
+    }
+
+    .empty-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--text-light);
+      margin-bottom: 0.5rem;
+    }
+
+    .empty-text {
+      color: #a0aec0;
+      margin-bottom: 1.5rem;
+      max-width: 500px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .empty-btn {
+      padding: 0.75rem 1.5rem;
+      background: var(--primary);
+      color: white;
+      border-radius: 8px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: var(--transition);
+    }
+
+    .empty-btn:hover {
+      background: var(--primary-dark);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .payment-header {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+      }
+
+      .payment-brand {
+        justify-content: center;
+      }
+
+      .back-btn {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .payment-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .card-group {
+        flex-direction: column;
+      }
+
+      .card-expiry-cvv {
+        flex-direction: column;
+      }
+
+      .expiry-input, .cvv-input {
+        width: 100%;
+      }
     }
   </style>
 </head>
 <body>
 
-<header>
-  <div class="logo">Agrolease</div>
-  <a href="dashboard.php" class="back-btn"><i class="fas fa-arrow-left"></i> Back</a>
+<!-- Header -->
+<header class="payment-header">
+  <div class="payment-brand">
+    <img src="img/logo.jpeg" alt="Agrolease Logo" class="payment-logo">
+    <div>
+      <h1 class="payment-title">Agrolease</h1>
+      <p class="payment-tagline">Secure Payment Portal</p>
+    </div>
+  </div>
+  <a href="dashboard.php" class="back-btn">
+    <i class="fas fa-arrow-left"></i> Back to Dashboard
+  </a>
 </header>
 
-<div class="container">
-  <h1>Payment Portal</h1>
-  
+<!-- Main Content -->
+<main class="payment-container">
+  <h1 class="page-title">Pending Payments</h1>
+
   <?php if (mysqli_num_rows($result) == 0): ?>
     <div class="empty-state">
-      <i class="far fa-check-circle"></i>
-      <h3>No Pending Payments</h3>
-      <p>You don't have any orders requiring payment at this time.</p>
+      <i class="far fa-check-circle empty-icon"></i>
+      <h2 class="empty-title">No Pending Payments</h2>
+      <p class="empty-text">You don't have any orders requiring payment at this time.</p>
+      <a href="equipment.php" class="empty-btn">
+        <i class="fas fa-tractor"></i> Browse Equipment
+      </a>
     </div>
   <?php else: ?>
-    <div class="orders-grid">
+    <div class="payment-grid">
       <?php while ($row = mysqli_fetch_assoc($result)): ?>
         <?php
-          $isPaid = ($row['payment_status'] === 'paid');
           $totalDays = ceil((strtotime($row['rental_end_date']) - strtotime($row['rental_start_date'])) / (60 * 60 * 24));
           $totalAmount = $row['price'];
         ?>
-        <div class="order-card">
-          <div class="order-id">Order #<?php echo htmlspecialchars($row['order_id']); ?></div>
-          <div class="status <?php echo $isPaid ? 'paid' : ''; ?>">
-            <?php echo $isPaid ? 'Paid' : 'Pending'; ?>
+        <div class="payment-card">
+          <div class="payment-card-header">
+            <span class="payment-id">Order #<?php echo $row['order_id']; ?></span>
+            <span class="payment-status status-pending">Pending Payment</span>
           </div>
           
-          <div class="order-details">
-            <p><strong>Equipment:</strong> <?php echo htmlspecialchars($row['equipment_name']); ?></p>
-            <p><strong>Period:</strong> <?php echo date('M j', strtotime($row['rental_start_date'])); ?> - <?php echo date('M j, Y', strtotime($row['rental_end_date'])); ?></p>
-            <p><strong>Days:</strong> <?php echo $totalDays; ?></p>
-            <p><strong>Rate:</strong> ₹<?php echo number_format($row['rent_per_day'], 2); ?>/day</p>
-            
-            <p class="total"><strong>Total:</strong> ₹<?php echo number_format($totalAmount, 2); ?></p>
+          <div class="payment-details">
+            <div class="detail-row">
+              <span class="detail-label">Equipment:</span>
+              <span class="detail-value"><?php echo $row['equipment_name']; ?></span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Rental Period:</span>
+              <span class="detail-value">
+                <?php echo date('M j, Y', strtotime($row['rental_start_date'])); ?> - 
+                <?php echo date('M j, Y', strtotime($row['rental_end_date'])); ?>
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Duration:</span>
+              <span class="detail-value"><?php echo $totalDays; ?> days</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Daily Rate:</span>
+              <span class="detail-value">₹<?php echo number_format($row['rent_per_day'], 2); ?></span>
+            </div>
+            <div class="detail-row payment-total">
+              <span class="detail-label">Total Amount:</span>
+              <span class="detail-value">₹<?php echo number_format($totalAmount, 2); ?></span>
+            </div>
           </div>
           
-          <button class="pay-btn" onclick="openModal('<?php echo $row['order_id']; ?>', <?php echo $totalAmount; ?>)" <?php echo $isPaid ? 'disabled' : ''; ?>>
-            <?php echo $isPaid ? '<i class="fas fa-check"></i> Paid' : '<i class="fas fa-credit-card"></i> Pay Now'; ?>
+          <button class="pay-btn" onclick="openPaymentModal('<?php echo $row['order_id']; ?>', <?php echo $totalAmount; ?>)">
+            <i class="fas fa-credit-card"></i> Pay Now
           </button>
         </div>
       <?php endwhile; ?>
     </div>
   <?php endif; ?>
-</div>
+</main>
 
 <!-- Payment Modal -->
-<div class="modal" id="paymentModal">
+<div class="payment-modal" id="paymentModal">
   <div class="modal-content">
-    <div id="paymentForm">
-      <div class="modal-header">
-        <h3>Complete Payment</h3>
-      </div>
-      
-      <div class="payment-methods">
-        <div class="method selected" data-method="card" onclick="selectMethod('card')">
-          <i class="far fa-credit-card"></i>
-          <div>Card</div>
-        </div>
-        <div class="method" data-method="netbanking" onclick="selectMethod('netbanking')">
-          <i class="fas fa-university"></i>
-          <div>Net Banking</div>
-        </div>
-        <div class="method" data-method="upi" onclick="selectMethod('upi')">
-          <i class="fas fa-mobile-alt"></i>
-          <div>UPI</div>
-        </div>
-      </div>
-      
-      <div class="payment-form" id="cardForm">
+    <div class="modal-header">
+      <h2 class="modal-title">Complete Payment</h2>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    
+    <div class="modal-body">
+      <!-- Card Payment -->
+      <div class="method-content active" id="cardContent">
         <div class="form-group">
-          <label>Card Number</label>
-          <input type="text" placeholder="1234 5678 9012 3456" maxlength="16" id="cardNumber">
+          <label class="form-label">Card Number</label>
+          <input type="text" class="form-control" placeholder="1234 5678 9012 3456" maxlength="19">
         </div>
         
         <div class="form-group">
-          <label>Expiry Date</label>
-          <input type="text" placeholder="MM/YY" maxlength="5" id="expiryDate">
+          <label class="form-label">Cardholder Name</label>
+          <input type="text" class="form-control" placeholder="Your Name ">
         </div>
         
-        <div class="form-group">
-          <label>CVV</label>
-          <input type="text" placeholder="123" maxlength="4" id="cvv">
+        <div class="form-group card-group">
+          <div class="card-expiry-cvv">
+            <label class="form-label">Expiry Date</label>
+            <input type="text" class="form-control expiry-input" placeholder="MM/YY">
+          </div>
+          <div class="card-expiry-cvv">
+            <label class="form-label">CVV</label>
+            <input type="text" class="form-control cvv-input" placeholder="123" maxlength="3">
+          </div>
         </div>
-      </div>
-      
-      <div class="payment-form" id="netbankingForm" style="display:none">
-        <div class="form-group">
-          <label>Select Bank</label>
-          <select id="bankSelect">
-            <option value="">Choose your bank</option>
-            <option>SBI</option>
-            <option>HDFC</option>
-            <option>ICICI</option>
-          </select>
-        </div>
-      </div>
-      
-      <div class="payment-form" id="upiForm" style="display:none">
-        <div class="form-group">
-          <label>UPI ID</label>
-          <input type="text" placeholder="name@upi" id="upiId">
-        </div>
-      </div>
-      
-      <div class="modal-footer">
-        <button class="modal-btn cancel-btn" onclick="closeModal()">Cancel</button>
-        <button class="modal-btn confirm-btn" id="confirmBtn" onclick="processPayment()">Pay ₹<span id="amountDisplay">0</span></button>
       </div>
     </div>
     
-    <div id="successMessage" class="success-message">
-      <i class="fas fa-check-circle"></i>
-      <h3>Payment Successful!</h3>
-      <button class="modal-btn confirm-btn" onclick="closeModal()">Done</button>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">
+        <i class="fas fa-times"></i> Cancel
+      </button>
+      <button class="btn btn-primary" id="confirmPaymentBtn" onclick="processPayment()">
+        <i class="fas fa-lock"></i> Pay Securely
+      </button>
     </div>
   </div>
 </div>
 
-<!-- Toast Notification -->
-<div class="toast" id="toast"></div>
+<!-- Processing Overlay -->
+<div class="processing-overlay" id="processingOverlay">
+  <div class="processing-spinner"></div>
+  <h3 class="processing-text">Processing Payment</h3>
+  <p class="processing-subtext">Please wait while we process your payment. Do not refresh or close this window.</p>
+</div>
+
+<!-- Success Overlay -->
+<div class="success-overlay" id="successOverlay">
+  <div class="success-icon">
+    <i class="fas fa-check"></i>
+  </div>
+  <h2 class="success-title">Payment Successful!</h2>
+  
+  <div class="success-details">
+    <div class="success-row">
+      <span class="success-label">Order ID:</span>
+      <span class="success-value" id="successOrderId"></span>
+    </div>
+    <div class="success-row">
+      <span class="success-label">Amount Paid:</span>
+      <span class="success-value" id="successAmount"></span>
+    </div>
+    <div class="success-row">
+      <span class="success-label">Payment Method:</span>
+      <span class="success-value" id="successMethod"></span>
+    </div>
+    <div class="success-row">
+      <span class="success-label">Transaction ID:</span>
+      <span class="success-value" id="successTxnId"></span>
+    </div>
+    <div class="success-row">
+      <span class="success-label">Date & Time:</span>
+      <span class="success-value" id="successDate"></span>
+    </div>
+  </div>
+  
+  <button class="success-btn" onclick="closeSuccess()">
+    <i class="fas fa-check"></i> Done
+  </button>
+</div>
 
 <script>
+  // Global variables
   let currentOrderId = null;
   let currentAmount = 0;
-  let currentMethod = 'card';
   
-  function openModal(orderId, amount) {
+  // DOM elements
+  const paymentModal = document.getElementById('paymentModal');
+  const processingOverlay = document.getElementById('processingOverlay');
+  const successOverlay = document.getElementById('successOverlay');
+  const confirmBtn = document.getElementById('confirmPaymentBtn');
+  
+  // Open payment modal
+  function openPaymentModal(orderId, amount) {
     currentOrderId = orderId;
     currentAmount = amount;
-    document.getElementById('paymentForm').style.display = 'block';
-    document.getElementById('successMessage').style.display = 'none';
-    document.getElementById('amountDisplay').textContent = amount.toFixed(2);
-    document.getElementById('paymentModal').style.display = 'flex';
+    paymentModal.classList.add('active');
+    document.body.style.overflow = 'hidden';
   }
   
+  // Close modal
   function closeModal() {
-    document.getElementById('paymentModal').style.display = 'none';
+    paymentModal.classList.remove('active');
+    document.body.style.overflow = '';
   }
   
-  function selectMethod(method) {
-    currentMethod = method;
-    document.querySelectorAll('.method').forEach(el => {
-      el.classList.toggle('selected', el.dataset.method === method);
-    });
-    document.getElementById('cardForm').style.display = method === 'card' ? 'block' : 'none';
-    document.getElementById('netbankingForm').style.display = method === 'netbanking' ? 'block' : 'none';
-    document.getElementById('upiForm').style.display = method === 'upi' ? 'block' : 'none';
-  }
-  
-  function showToast(message, isError = false) {
-    const toast = document.getElementById('toast');
-    toast.textContent = message;
-    toast.className = isError ? 'toast error' : 'toast';
-    toast.style.display = 'block';
-    setTimeout(() => toast.style.display = 'none', 3000);
-  }
-  
+  // Process payment
   function processPayment() {
-    const btn = document.getElementById('confirmBtn');
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
-    btn.disabled = true;
+    // Show processing overlay
+    processingOverlay.classList.add('active');
     
-    const formData = new FormData();
-    formData.append('order_id', currentOrderId);
-    formData.append('payment_method', currentMethod);
-    
-    fetch(window.location.href, {
-      method: 'POST',
-      body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-      if (data.success) {
-        document.getElementById('paymentForm').style.display = 'none';
-        document.getElementById('successMessage').style.display = 'block';
-        showToast('Payment successful!');
-        
-        // Update the UI
-        const payBtn = document.querySelector(`button[onclick="openModal('${currentOrderId}', ${currentAmount})"]`);
-        if (payBtn) {
-          payBtn.innerHTML = '<i class="fas fa-check"></i> Paid';
-          payBtn.disabled = true;
-          payBtn.closest('.order-card').querySelector('.status').textContent = 'Paid';
-          payBtn.closest('.order-card').querySelector('.status').classList.add('paid');
+    // Simulate API call with 2 second delay
+    setTimeout(() => {
+      // Create form data
+      const formData = new FormData();
+      formData.append('order_id', currentOrderId);
+      
+      // Make AJAX request to same page
+      fetch(window.location.href, {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          // Show success overlay
+          processingOverlay.classList.remove('active');
+          showSuccess(data);
+        } else {
+          alert('Payment failed: ' + (data.message || 'Unknown error'));
+          processingOverlay.classList.remove('active');
         }
-      } else {
-        showToast(data.message || 'Payment failed', true);
-        btn.innerHTML = 'Pay ₹' + currentAmount.toFixed(2);
-        btn.disabled = false;
-      }
-    })
-    .catch(error => {
-      showToast('Payment failed. Please try again.', true);
-      btn.innerHTML = 'Pay ₹' + currentAmount.toFixed(2);
-      btn.disabled = false;
-    });
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Payment failed. Please try again.');
+        processingOverlay.classList.remove('active');
+      });
+    }, 2000);
   }
+  
+  // Show success screen
+  function showSuccess(data) {
+    document.getElementById('successOrderId').textContent = currentOrderId;
+    document.getElementById('successAmount').textContent = '₹' + currentAmount.toFixed(2);
+    document.getElementById('successMethod').textContent = 'Credit/Debit Card';
+    document.getElementById('successTxnId').textContent = data.payment_id;
+    document.getElementById('successDate').textContent = data.timestamp;
+    
+    successOverlay.classList.add('active');
+  }
+  
+  // Close success overlay
+  function closeSuccess() {
+    successOverlay.classList.remove('active');
+    paymentModal.classList.remove('active');
+    document.body.style.overflow = '';
+    
+    // Reload the page to update payment status
+    setTimeout(() => location.reload(), 300);
+  }
+  
+  // Format card number input
+  document.addEventListener('DOMContentLoaded', function() {
+    const cardInput = document.querySelector('#cardContent input[type="text"]');
+    if (cardInput) {
+      cardInput.addEventListener('input', function(e) {
+        let value = e.target.value.replace(/\s+/g, '');
+        if (value.length > 0) {
+          value = value.match(new RegExp('.{1,4}', 'g')).join(' ');
+        }
+        e.target.value = value;
+      });
+    }
+    
+    // Format expiry date input
+    const expiryInput = document.querySelector('.expiry-input');
+    if (expiryInput) {
+      expiryInput.addEventListener('input', function(e) {
+        let value = e.target.value.replace(/\D/g, '');
+        if (value.length >= 2) {
+          value = value.substring(0, 2) + '/' + value.substring(2, 4);
+        }
+        e.target.value = value;
+      });
+    }
+  });
 </script>
 
 </body>

@@ -365,9 +365,6 @@ $result = mysqli_query($conn, $query);
     <a href="vendor_dashboard.php" class="btn btn-outline">
       <i class="fas fa-arrow-left"></i> Dashboard
     </a>
-    <a href="logout.php" class="btn btn-primary">
-      <i class="fas fa-sign-out-alt"></i> Logout
-    </a>
   </div>
 </header>
 
