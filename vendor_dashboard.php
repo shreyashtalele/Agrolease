@@ -2,7 +2,6 @@
 session_start();
 include 'db.php';
 
-// Check if vendor is logged in
 if (!isset($_SESSION['vendorid'])) {
     header("Location: vendor_login.php");
     exit();
@@ -10,53 +9,46 @@ if (!isset($_SESSION['vendorid'])) {
 
 $vendorID = $_SESSION['vendorid'];
 
-// Get vendor information
-$vendorQuery = "SELECT * FROM vendor WHERE vendorid = '$vendorID'";
-$vendorResult = mysqli_query($conn, $vendorQuery);
-$vendor = mysqli_fetch_assoc($vendorResult);
+/* Vendor Info */
+$vendor = mysqli_fetch_assoc(
+    mysqli_query($conn, "SELECT * FROM vendor WHERE vendorid='$vendorID'")
+);
 
-// Get statistics for dashboard
-$equipmentCount = mysqli_fetch_assoc(mysqli_query($conn, 
-    "SELECT COUNT(*) as count FROM equipment WHERE vendor_id = '$vendorID'"))['count'];
+/* Stats */
+$equipmentCount = mysqli_fetch_assoc(mysqli_query($conn,
+    "SELECT COUNT(*) count FROM equipment WHERE vendor_id='$vendorID'"
+))['count'];
 
-$pendingRequests = mysqli_fetch_assoc(mysqli_query($conn, 
-    "SELECT COUNT(*) as count FROM orders WHERE vendor_id = '$vendorID' AND status = 'pending'"))['count'];
+$pendingRequests = mysqli_fetch_assoc(mysqli_query($conn,
+    "SELECT COUNT(*) count FROM orders WHERE vendor_id='$vendorID' AND status='Pending'"
+))['count'];
 
-$activeRentals = mysqli_fetch_assoc(mysqli_query($conn, 
-    "SELECT COUNT(*) as count FROM orders WHERE vendor_id = '$vendorID' AND status = 'confirmed'"))['count'];
+$activeRentals = mysqli_fetch_assoc(mysqli_query($conn,
+    "SELECT COUNT(*) count FROM orders WHERE vendor_id='$vendorID' AND status='Confirmed'"
+))['count'];
 
-$overdueReturns = mysqli_fetch_assoc(mysqli_query($conn, 
-    "SELECT COUNT(*) as count FROM orders WHERE vendor_id = '$vendorID' AND status = 'confirmed' 
-     AND rental_end_date < CURDATE()"))['count'];
+$overdueReturns = mysqli_fetch_assoc(mysqli_query($conn,
+    "SELECT COUNT(*) count FROM orders 
+     WHERE vendor_id='$vendorID' AND status='Confirmed' AND rental_end_date < CURDATE()"
+))['count'];
 
-// Get recent activity
-$activityQuery = "SELECT o.*, u.full_name, e.equipment_name 
-                 FROM orders o 
-                 JOIN user u ON o.user_id = u.userid 
-                 JOIN equipment e ON o.equipment_id = e.equipment_id 
-                 WHERE o.vendor_id = '$vendorID' 
-                 ORDER BY o.created_at DESC LIMIT 4";
-$activityResult = mysqli_query($conn, $activityQuery);
-$recentActivities = mysqli_fetch_all($activityResult, MYSQLI_ASSOC);
-
-// Get unread notifications count
-$notificationCount = mysqli_fetch_assoc(mysqli_query($conn, 
-    "SELECT COUNT(*) as count FROM orders WHERE vendor_id = '$vendorID' AND status = 'pending'"))['count'];
+/* Recent Activity */
+$recentActivities = mysqli_fetch_all(mysqli_query($conn,"
+    SELECT o.status,o.created_at,e.equipment_name
+    FROM orders o
+    JOIN equipment e ON o.equipment_id=e.equipment_id
+    WHERE o.vendor_id='$vendorID'
+    ORDER BY o.created_at DESC LIMIT 4
+"), MYSQLI_ASSOC);
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Vendor Dashboard - Agrolease</title>
-
-  <!-- Google Font -->
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <!-- Font Awesome -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
-  <!-- Boxicons -->
-  <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+<meta charset="UTF-8">
+<title>Vendor Dashboard - Agrolease</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
   <style>
     :root {
@@ -485,161 +477,72 @@ $notificationCount = mysqli_fetch_assoc(mysqli_query($conn,
     }
   </style>
 </head>
+
 <body>
 
 <header>
   <div class="logo-block">
-    <img src="img/logo.jpeg" alt="Agrolease Logo" />
-    <div class="site-info">
-      <h1>Agrolease</h1>
-      <p>Harvest Success with Innovative Farming Solutions</p>
+    <img src="img/logo.jpeg">
+    <div>
+      <h2>Agrolease</h2>
+      <small>Harvest Success with Innovative Farming Solutions</small>
     </div>
   </div>
-  <nav class="header-links">
-  
-    <a href="logout.php">
-      <i class="fas fa-sign-out-alt"></i> Logout
-    </a>
-  </nav>
+  <a href="logout.php" style="color:#fff;text-decoration:none">Logout</a>
 </header>
 
 <main>
-  <section class="welcome-section">
-    <h2>Welcome back, <?= htmlspecialchars($vendor['vendor_name']) ?>!</h2>
-    <p>Here's what's happening with your business today</p>
-  </section>
 
-  <div class="stats-grid">
-    <div class="stat-card">
-      <div class="stat-icon primary">
-        <i class="fas fa-tractor"></i>
-      </div>
-      <div class="stat-content">
-        <h3><?= $equipmentCount ?></h3>
-        <p>Total Equipment</p>
-      </div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon warning">
-        <i class="fas fa-handshake"></i>
-      </div>
-      <div class="stat-content">
-        <h3><?= $pendingRequests ?></h3>
-        <p>Pending Requests</p>
-      </div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon success">
-        <i class="fas fa-check-circle"></i>
-      </div>
-      <div class="stat-content">
-        <h3><?= $activeRentals ?></h3>
-        <p>Active Rentals</p>
-      </div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon danger">
-        <i class="fas fa-exclamation-circle"></i>
-      </div>
-      <div class="stat-content">
-        <h3><?= $overdueReturns ?></h3>
-        <p>Overdue Returns</p>
-      </div>
-    </div>
+<section class="welcome-section">
+  <h2>Welcome, <?= htmlspecialchars($vendor['vendor_name']) ?></h2>
+</section>
+
+<div class="stats-grid">
+  <div class="stat-card"><div class="stat-icon"><i class="fas fa-tractor"></i></div><h3><?= $equipmentCount ?></h3><p>Total Equipment</p></div>
+  <div class="stat-card"><div class="stat-icon"><i class="fas fa-handshake"></i></div><h3><?= $pendingRequests ?></h3><p>Pending Requests</p></div>
+  <div class="stat-card"><div class="stat-icon"><i class="fas fa-check-circle"></i></div><h3><?= $activeRentals ?></h3><p>Active Rentals</p></div>
+  <div class="stat-card"><div class="stat-icon"><i class="fas fa-exclamation-circle"></i></div><h3><?= $overdueReturns ?></h3><p>Overdue Returns</p></div>
+</div>
+
+<!-- ===== ADDED OLD PAGE OPTIONS (THIS WAS MISSING) ===== -->
+<div class="actions-grid" style="margin-top:2rem">
+
+  <div class="action-card">
+    <div class="action-icon"><i class="fas fa-plus-circle"></i></div>
+    <h3>Add Equipment</h3>
+    <a href="Equipment.php" class="action-btn">Open</a>
   </div>
 
-  <h3 style="font-size: 1.5rem; margin-bottom: 1.5rem; color: var(--dark);">Quick Actions</h3>
-  <div class="actions-grid">
-    <div class="action-card">
-      <div class="action-icon">
-        <i class="fas fa-tractor"></i>
-      </div>
-      <h3>Add Equipment</h3>
-      <p>List new  equipment for rental</p>
-      <a href="Equipment.php" class="action-btn">
-        <i class="fas fa-plus"></i> Add Now
-      </a>
-    </div>
-    <div class="action-card">
-      <div class="action-icon">
-        <i class="fas fa-handshake"></i>
-      </div>
-      <h3>Rent Requests</h3>
-      <p>Manage incoming rental requests</p>
-      <a href="rentdashboard.php" class="action-btn">
-        <i class="fas fa-eye"></i> View Requests
-      </a>
-    </div>
-    <div class="action-card">
-      <div class="action-icon">
-        <i class="fas fa-boxes"></i>
-      </div>
-      <h3>Current Stock</h3>
-      <p>View and manage your inventory</p>
-      <a href="currentstock.php" class="action-btn">
-        <i class="fas fa-box-open"></i> View Stock
-      </a>
-    </div>
-    <div class="action-card">
-      <div class="action-icon">
-        <i class="fas fa-chart-line"></i>
-      </div>
-      <h3>View Reports</h3>
-      <p>Analyze your business performance</p>
-      <a href="reports.php" class="action-btn">
-        <i class="fas fa-chart-pie"></i> Generate Reports
-      </a>
-    </div>
+  <div class="action-card">
+    <div class="action-icon"><i class="fas fa-handshake"></i></div>
+    <h3>Rent Requests</h3>
+    <a href="rentdashboard.php" class="action-btn">Open</a>
   </div>
 
-  <div class="recent-activity">
-    <h3><i class="fas fa-history"></i> Recent Activity</h3>
-    <div class="activity-list">
-      <?php if (!empty($recentActivities)): ?>
-        <?php foreach ($recentActivities as $activity): ?>
-          <div class="activity-item">
-            <div class="activity-icon">
-              <?php if ($activity['status'] == 'pending'): ?>
-                <i class="fas fa-exclamation-circle"></i>
-              <?php elseif ($activity['status'] == 'confirmed'): ?>
-                <i class="fas fa-check-circle"></i>
-              <?php elseif ($activity['status'] == 'completed'): ?>
-                <i class="fas fa-dollar-sign"></i>
-              <?php else: ?>
-                <i class="fas fa-tractor"></i>
-              <?php endif; ?>
-            </div>
-            <div class="activity-content">
-              <p>
-                <strong>
-                  <?= ucfirst($activity['status']) ?> rental
-                </strong> 
-                for <?= htmlspecialchars($activity['equipment_name']) ?> by <?= htmlspecialchars($activity['full_name']) ?>
-              </p>
-              <div class="activity-time">
-                <i class="far fa-clock"></i> 
-                <?= date("M j, Y g:i A", strtotime($activity['created_at'])) ?>
-              </div>
-            </div>
-          </div>
-        <?php endforeach; ?>
-      <?php else: ?>
-        <div class="activity-item">
-          <div class="activity-icon">
-            <i class="fas fa-info-circle"></i>
-          </div>
-          <div class="activity-content">
-            <p>No recent activity found</p>
-          </div>
-        </div>
-      <?php endif; ?>
-    </div>
+  <div class="action-card">
+    <div class="action-icon"><i class="fas fa-warehouse"></i></div>
+    <h3>Current Stock</h3>
+    <a href="currentstock.php" class="action-btn">Open</a>
   </div>
+
+  <div class="action-card">
+    <div class="action-icon"><i class="fas fa-chart-line"></i></div>
+    <h3>View Reports</h3>
+    <a href="reports.php" class="action-btn">Open</a>
+  </div>
+
+</div>
+
+<div class="recent-activity">
+  <h3>Recent Activity</h3>
+  <?php foreach($recentActivities as $a): ?>
+    <p><?= $a['status'] ?> – <?= $a['equipment_name'] ?> (<?= $a['created_at'] ?>)</p>
+  <?php endforeach; ?>
+</div>
+
 </main>
 
-<footer>
-  <p>&copy; <?= date('Y') ?> Agrolease. All rights reserved.</p>
-</footer>
+<footer>&copy; <?= date('Y') ?> Agrolease</footer>
 
 </body>
 </html>
